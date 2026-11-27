@@ -193,7 +193,11 @@ tiles.maxTilesProcessed = 120;
 tiles.setCamera(camera);
 scene.add(tiles.group);
 let terrainLoaded = false, terrainError = false;
-tiles.addEventListener('load-model', (e) => { terrainLoaded = true; styleDirty = true; });
+tiles.addEventListener('load-model', (e) => {
+  terrainLoaded = true; styleDirty = true;
+  // fix the water mask before the tile is ever drawn, so it never flashes its sea
+  if (e.scene) e.scene.traverse(o => { if (o.isMesh && o.material) fixMask(o.material.roughnessMap); });
+});
 tiles.addEventListener('load-error', (e) => {
   console.warn('Terrain load error', e);
   if (!terrainLoaded && !terrainError) { terrainError = true; setStatus('TERRAIN COULD NOT LOAD — CHECK THE CESIUM TOKEN'); }
