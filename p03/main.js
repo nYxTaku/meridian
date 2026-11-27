@@ -487,7 +487,7 @@ function recenterOnShip() {
   camera.position.x -= dx; camera.position.z -= dz;
   for (const w of wake) { w.x -= dx; w.z -= dz; }
   waveOff.x += dx; waveOff.y += dz;
-  calibrated = false; calibTimer = 0; camGround = null;
+  calibTimer = 0; camGround = null; // keep the current sea level; it is re-checked in the background
 }
 // Cesium heights are ellipsoidal; its sea surface sits at the local geoid height, and
 // low-detail tiles put it higher than sharp ones. Once loading has settled, sample
