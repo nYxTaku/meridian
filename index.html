@@ -153,11 +153,11 @@ scene.add(sun);
 
 // ---------- ships ----------
 const SHIPS = [
-  { id: 'fishing',   name: 'Fishing boat',   file: 'fishing_boat.glb',   scale: 1.25, maxSpeed: 10.0, accel: 0.60, turn: 0.42, resp: 3.2, heel: 0.12, zoom: 24, pitch: 0.26,
+  { id: 'fishing',   name: 'Fishing boat',   file: 'fishing_boat.glb',   scale: 1.0,  lift: 0.9, maxSpeed: 10.0, accel: 0.60, turn: 0.42, resp: 3.2, heel: 0.12, zoom: 24, pitch: 0.26,
     stats: { speed: 5, turning: 5, stability: 2 }, blurb: 'Small and quick. Turns sharply, rides every wave.' },
-  { id: 'freighter', name: 'Freighter',      file: 'freighter.glb',      scale: 3.0,  maxSpeed: 7.5,  accel: 0.20, turn: 0.15, resp: 1.5, heel: 0.05, zoom: 72, pitch: 0.32,
+  { id: 'freighter', name: 'Freighter',      file: 'freighter.glb',      scale: 3.0,  lift: 0.5,  maxSpeed: 7.5,  accel: 0.20, turn: 0.15, resp: 1.5, heel: 0.05, zoom: 72, pitch: 0.32,
     stats: { speed: 3, turning: 3, stability: 4 }, blurb: 'Mid-size cargo vessel. Steady, with a wider turn.' },
-  { id: 'container', name: 'Container ship', file: 'container_ship.glb', scale: 7.0,  maxSpeed: 6.5,  accel: 0.13, turn: 0.075, resp: 0.9, heel: 0.02, zoom: 140, pitch: 0.38,
+  { id: 'container', name: 'Container ship', file: 'container_ship.glb', scale: 7.0,  lift: 0.6,  maxSpeed: 6.5,  accel: 0.13, turn: 0.075, resp: 0.9, heel: 0.02, zoom: 140, pitch: 0.38,
     stats: { speed: 2, turning: 1, stability: 5 }, blurb: 'Large and heavy. Slow to speed up and to turn.' },
 ];
 
@@ -370,7 +370,9 @@ const buoys = [];
 async function loadAll() {
   const shipScenes = await Promise.all(SHIPS.map(s => loadGLB(s.file)));
   SHIPS.forEach((s, i) => {
-    const g = new THREE.Group(); const m = shipScenes[i]; m.scale.setScalar(s.scale); g.add(m);
+    const g = new THREE.Group(); const m = shipScenes[i]; m.scale.setScalar(s.scale);
+    m.position.y = s.lift * s.scale; // raise the painted waterline to sea level
+    g.add(m);
     const box = new THREE.Box3().setFromObject(g); const size = box.getSize(new THREE.Vector3());
     s.obj = g; s.L = size.z; s.W = size.x; s.H = size.y;
   });
