@@ -8,7 +8,7 @@ import { CesiumIonAuthPlugin, ImageOverlayPlugin, CesiumIonOverlay, Reorientatio
 const ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IjlzdnZhd2dMaTNlb1pTOTAiLCJqdGkiOiIyYjRhOWU2ZS00NGQ5LTRjMDEtYTNmOC02MDMyZGU0MzNmMGMiLCJpZCI6NTU4MjkxLCJzdWIiOiJuWXhUYWt1IiwiaXNzIjoiaHR0cHM6Ly9hcGkuY2VzaXVtLmNvbSIsImF1ZCI6Im1lcmlkaWFuLXdlYiIsImlhdCI6MTc5NTgwNDY0N30.ZLaXM5_Men1LzUSh_RMqdTr04Thd6FHdj4VbynXeN4E';
 const TERRAIN_ASSET = '1';   // Cesium World Terrain
 const IMAGERY_ASSET = '2';   // Bing Maps Aerial
-const START = { lat: 37.925, lon: 23.600, heading: 215 }; // off Piraeus, bow toward Aegina
+const START = { lat: 37.925, lon: 23.600, heading: 330 }; // off Piraeus, bow toward Psyttaleia and the Salamis strait
 const DEG = Math.PI / 180;
 const EARTH_R = 6371000;
 const LAND_H = 0.8;          // terrain this far above sea level counts as land
@@ -27,10 +27,10 @@ const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 150000);
 
 const SUN_DIR = new THREE.Vector3(0.35, 0.32, -0.88).normalize();
 const C = { zenith: new THREE.Color('#4F86BA'), horizon: new THREE.Color('#C6D9E4'), deep: new THREE.Color('#0A3346'), crest: new THREE.Color('#2A8C8C') };
-const FOG_DENSITY = 1 / 16000;
+const FOG_DENSITY = 1 / 24000;
 scene.fog = new THREE.FogExp2(C.horizon.getHex(), FOG_DENSITY);
-scene.add(new THREE.HemisphereLight(0xdfeaf2, 0x3d5560, 1.5));
-const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+scene.add(new THREE.HemisphereLight(0xdfeaf2, 0x3d5560, 1.15));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
 sun.position.copy(SUN_DIR).multiplyScalar(200);
 scene.add(sun);
 
@@ -204,9 +204,9 @@ const PALETTE = [ // [typical imagery colour (sRGB), stylized output]
   ['#3B4630', '#4F6E3F'], // dark forest
   ['#6E7150', '#7C8A55'], // olive scrub
   ['#A39274', '#CDB98F'], // dry soil, fields
-  ['#C8BEA6', '#E2D6B8'], // limestone, sand
-  ['#8A867E', '#9A958A'], // bare rock
-  ['#D6D2CA', '#ECEAE5'], // white town
+  ['#C8BEA6', '#D2C29C'], // limestone, sand
+  ['#8A867E', '#938C7E'], // bare rock
+  ['#D6D2CA', '#E0DACD'], // white town
   ['#A2654F', '#C47A5E'], // terracotta roofs
   ['#3A3936', '#5E5A52'], // shadow, asphalt
   ['#2A4656', '#3E7F8C'], // inland water
