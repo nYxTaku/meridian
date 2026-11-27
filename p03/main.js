@@ -200,7 +200,7 @@ tiles.addEventListener('load-error', (e) => {
 });
 
 // Stylized look: satellite colours snapped to a small palette, flat-shaded facets,
-// and Cesium's flat sea surface pushed under the animated ocean. Done once, globally,
+// and Cesium's own sea surface cut out using its water mask. Done once, globally,
 // through three.js shader chunks that only apply to materials with the STYLIZED define,
 // so terrain materials never need their shaders rebuilt after the first compile.
 const PALETTE = [ // [typical imagery colour (sRGB), stylized output (sRGB)]
@@ -225,8 +225,6 @@ const linVec = h => { const c = new THREE.Color(h); return `vec3(${c.r.toFixed(4
   vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 );
   vec3 styW = transpose( mat3( viewMatrix ) ) * mvPosition.xyz + cameraPosition;
   float styH = styW.y + dot( styW.xz, styW.xz ) / ( 2.0 * ${EARTH_R.toFixed(1)} );
-  float styDrop = ( 1.0 - smoothstep( 0.3, 1.6, styH ) ) * 14.0;
-  mvPosition.xyz -= mat3( viewMatrix ) * vec3( 0.0, styDrop, 0.0 );
   vStyleY = styH;
   gl_Position = projectionMatrix * mvPosition;
 #else
@@ -236,6 +234,10 @@ ${origProject}
   const origAlphamap = SC.alphamap_fragment;
   SC.alphamap_fragment = /* glsl */`
 #ifdef STYLIZED
+  #ifdef USE_ROUGHNESSMAP
+    // Cesium water mask (stored by the terrain loader as the roughness map: 0 = water)
+    if ( texture2D( roughnessMap, vRoughnessMapUv ).g < 0.5 ) discard;
+  #endif
   {
     const vec3 SAND = ${linVec('#D2C29C')}; const vec3 GRASS = ${linVec('#5F7D4A')}; const vec3 ROCK = ${linVec('#938C7E')};
     #ifdef LAYER_COUNT
@@ -272,14 +274,26 @@ function styleTerrain() {
   tiles.group.traverse(o => { if (o.isMesh && o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(styleMaterial); });
 }
 
-// terrain queries: height above sea level under (x, z), or null if not loaded
+// terrain queries: { h: height above sea level, water: true/false/null } or null if not loaded
 const ray = new THREE.Raycaster(); ray.firstHitOnly = true; ray.far = 20000;
 const DOWN = new THREE.Vector3(0, -1, 0), _o = new THREE.Vector3();
-function terrainAt(x, z) {
+function waterAtHit(hit) {
+  const map = hit.object.material && hit.object.material.roughnessMap;
+  if (!map || !map.image || !map.image.data || !hit.uv) return null;
+  const { data, width, height } = map.image;
+  const col = Math.min(width - 1, Math.max(0, Math.round(hit.uv.x * (width - 1))));
+  const row = Math.min(height - 1, Math.max(0, Math.round((1 - hit.uv.y) * (height - 1)))); // texture is flipped on upload
+  return data[2 * (row * width + col)] < 128;
+}
+function surfaceAt(x, z) {
   ray.set(_o.set(x, 8000, z), DOWN);
   const hit = ray.intersectObject(tiles.group, true)[0];
-  return hit ? hit.point.y + (x * x + z * z) / (2 * EARTH_R) : null;
+  if (!hit) return null;
+  return { h: hit.point.y + (x * x + z * z) / (2 * EARTH_R), water: waterAtHit(hit) };
 }
+function terrainAt(x, z) { const s = surfaceAt(x, z); return s ? s.h : null; }
+function isLand(x, z) { const s = surfaceAt(x, z); if (!s) return false; return s.water === null ? s.h > LAND_H : !s.water; }
+const tilesIdle = () => { const st = tiles.stats; return st.downloading === 0 && st.parsing === 0 && st.queued === 0; };
 const _inv = new THREE.Matrix4(), _ecef = new THREE.Vector3(), cart = {};
 function latLonAt(x, z) {
   _ecef.set(x, 0, z).applyMatrix4(_inv.copy(tiles.group.matrixWorld).invert());
@@ -470,33 +484,33 @@ function recenterOnShip() {
   waveOff.x += dx; waveOff.y += dz;
   calibrated = false; calibTimer = 0; camGround = null;
 }
-// Cesium heights are ellipsoidal; its sea surface sits at the local geoid height.
-// Sample flat open water around the ship and move the world so that surface is y = 0.
+// Cesium heights are ellipsoidal; its sea surface sits at the local geoid height, and
+// low-detail tiles put it higher than sharp ones. Once loading has settled, sample
+// water-masked points near the ship and move the world so that the sea is y = 0.
 let calibrated = false, calibTimer = 0;
 function calibrate() {
-  const pts = [[0, 0], [400, 0], [-400, 0], [0, 400], [0, -400], [280, 280], [-280, -280]];
-  const hs = pts.map(([x, z]) => terrainAt(ship.x + x, ship.z + z)).filter(h => h !== null);
-  if (hs.length < 5) return false;
+  if (!tilesIdle()) return false;
+  const hs = [];
+  for (let gx = -2; gx <= 2; gx++) for (let gz = -2; gz <= 2; gz++) {
+    const s = surfaceAt(ship.x + gx * 350, ship.z + gz * 350);
+    if (s && s.water === true) hs.push(s.h);
+  }
+  if (hs.length < 4) return calibrated; // not enough open water here; keep what we have
   hs.sort((a, b) => a - b);
-  const lo = hs[0], mid = hs[Math.floor(hs.length / 2)];
-  // the sea is the lowest flat surface; accept when most samples agree within 1.5 m
-  const flat = hs.filter(h => Math.abs(h - lo) < 1.5);
-  if (flat.length < 4) return false;
-  const off = flat.reduce((s, h) => s + h, 0) / flat.length;
-  if (Math.abs(off) > 0.15) { seaHeight += off; reorient.transformLatLonHeightToOrigin(originLat, originLon, seaHeight); }
+  const off = hs[Math.floor(hs.length / 2)];
+  if (Math.abs(off) > 0.3) { seaHeight += off; reorient.transformLatLonHeightToOrigin(originLat, originLon, seaHeight); camGround = null; }
   return true;
 }
 // If the start point turns out to be on land, find the nearest open water.
 let spawnChecked = false;
 function checkSpawn() {
-  const h0 = terrainAt(ship.x, ship.z);
-  if (h0 === null) return false;
-  if (h0 < LAND_H) return true;
+  if (terrainAt(ship.x, ship.z) === null) return false;
+  if (!isLand(ship.x, ship.z)) return true;
   for (let r = 100; r <= 4000; r += 100) {
     for (let a = 0; a < 24; a++) {
       const x = ship.x + Math.cos(a / 24 * Math.PI * 2) * r, z = ship.z + Math.sin(a / 24 * Math.PI * 2) * r;
-      const h = terrainAt(x, z);
-      if (h !== null && h < -0.5) { ship.x = x; ship.z = z; return true; }
+      const sfc = surfaceAt(x, z);
+      if (sfc && (sfc.water === true || (sfc.water === null && sfc.h < -0.5))) { ship.x = x; ship.z = z; return true; }
     }
   }
   return true;
@@ -521,7 +535,8 @@ function step() {
   // terrain housekeeping
   if (tiles.errorTarget !== TERRAIN_ERROR) tiles.errorTarget = TERRAIN_ERROR; // the terrain plugin resets this on load
   styleTimer += dt; if (styleDirty || styleTimer > 1.5) { styleTimer = 0; styleTerrain(); }
-  if (terrainLoaded && !calibrated) { calibTimer += dt; if (calibTimer > 1.5) { calibTimer = 0; calibrated = calibrate(); } }
+  calibTimer += dt;
+  if (terrainLoaded && calibTimer > (calibrated ? 6 : 1)) { calibTimer = 0; calibrated = calibrate(); }
   if (terrainLoaded && calibrated && !spawnChecked) spawnChecked = checkSpawn();
   if (terrainLoaded && calibrated && spawnChecked && !terrainError) setStatus(null);
   else if (!terrainError) setStatus(terrainLoaded ? 'FINDING SEA LEVEL…' : 'LOADING TERRAIN…');
@@ -544,8 +559,7 @@ function step() {
       if (terrainLoaded && calibrated && Math.abs(ship.v) > 0.05) {
         const dir = Math.sign(ship.v), reach = (L * 0.5 + 4 + Math.abs(ship.v) * (1.5 + 0.25 * timeScale)) * dir;
         for (const [lx, lz] of [[0, reach], [W * 0.45, reach * 0.8], [-W * 0.45, reach * 0.8]]) {
-          const h = terrainAt(ship.x + lx * cy + lz * sy, ship.z - lx * sy + lz * cy);
-          if (h !== null && h > LAND_H) { landAhead = true; break; }
+          if (isLand(ship.x + lx * cy + lz * sy, ship.z - lx * sy + lz * cy)) { landAhead = true; break; }
         }
       }
     }
@@ -643,4 +657,4 @@ requestAnimationFrame(step);
 loadShips().catch(e => { document.getElementById('loading').textContent = 'COULD NOT LOAD THE SHIP MODELS. RELOAD TO TRY AGAIN.'; console.error(e); });
 
 // debug handle for inspecting the live page
-window.__meridian = { tiles, ship, camera, scene, terrainAt, get seaHeight() { return seaHeight; }, get calibrated() { return calibrated; }, get terrainLoaded() { return terrainLoaded; }, get spawnChecked() { return spawnChecked; } };
+window.__meridian = { tiles, ship, camera, scene, terrainAt, surfaceAt, isLand, get seaHeight() { return seaHeight; }, get calibrated() { return calibrated; }, get terrainLoaded() { return terrainLoaded; }, get spawnChecked() { return spawnChecked; } };
