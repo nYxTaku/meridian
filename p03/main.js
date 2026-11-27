@@ -611,3 +611,6 @@ function step() {
 requestAnimationFrame(step);
 
 loadShips().catch(e => { document.getElementById('loading').textContent = 'COULD NOT LOAD THE SHIP MODELS. RELOAD TO TRY AGAIN.'; console.error(e); });
+
+// debug handle for inspecting the live page
+window.__meridian = { tiles, ship, camera, scene, terrainAt, get seaHeight() { return seaHeight; }, get calibrated() { return calibrated; }, get terrainLoaded() { return terrainLoaded; }, get spawnChecked() { return spawnChecked; } };
