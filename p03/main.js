@@ -18,7 +18,7 @@ const canvas = document.getElementById('c');
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true }); }
 catch (e) { document.getElementById('err').style.display = 'flex'; throw e; }
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -187,11 +187,14 @@ tiles.registerPlugin(new ImageOverlayPlugin({ renderer, overlays: [new CesiumIon
 const reorient = new ReorientationPlugin({ lat: originLat, lon: originLon, height: seaHeight, recenter: true });
 tiles.registerPlugin(reorient);
 tiles.registerPlugin(new TilesFadePlugin());
-tiles.errorTarget = 4;
+const TERRAIN_ERROR = 10;  // higher = coarser terrain, fewer tiles to load
+tiles.errorTarget = TERRAIN_ERROR;
+tiles.loadSiblings = false;
+tiles.maxTilesProcessed = 120;
 tiles.setCamera(camera);
 scene.add(tiles.group);
 let terrainLoaded = false, terrainError = false;
-tiles.addEventListener('load-model', () => { if (!terrainLoaded) { terrainLoaded = true; } });
+tiles.addEventListener('load-model', (e) => { terrainLoaded = true; styleDirty = true; });
 tiles.addEventListener('load-error', (e) => {
   console.warn('Terrain load error', e);
   if (!terrainLoaded && !terrainError) { terrainError = true; setStatus('TERRAIN COULD NOT LOAD — CHECK THE CESIUM TOKEN'); }
@@ -261,8 +264,9 @@ function styleMaterial(mat) {
   mat.defines = { ...(mat.defines || {}), STYLIZED: 1 };
   mat.needsUpdate = true;
 }
-let styleTimer = 0;
+let styleTimer = 0, styleDirty = true;
 function styleTerrain() {
+  styleDirty = false;
   tiles.group.traverse(o => { if (o.isMesh && o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(styleMaterial); });
 }
 
@@ -305,6 +309,8 @@ function spawnWake(x, z, vx, vz, s0, grow, life, power) {
 
 // ---------- state ----------
 const THROTTLE = [-0.25, 0, 0.35, 0.65, 1.0];
+const TIME_STEPS = [1, 5, 20, 50];
+let timeIdx = 0, timeScale = 1;
 // world frame: +Z north, -X east, +Y up. Heading H -> yaw = -H.
 const ship = { x: 0, z: 0, yaw: -START.heading * DEG, v: 0, level: 1, rudder: 0, y: 0, pitch: 0, roll: 0 };
 let def = null, shipObj = null, L = 8, W = 4;
@@ -314,7 +320,8 @@ const shipRoot = new THREE.Group(); scene.add(shipRoot);
 
 // ---------- ship models ----------
 const loader = new GLTFLoader();
-const loadGLB = f => new Promise((res, rej) => loader.load('../assets/models/' + f, g => res(g.scene), undefined, rej));
+const MODEL_DIR = new URL('../assets/models/', import.meta.url).href;
+const loadGLB = f => new Promise((res, rej) => loader.load(MODEL_DIR + f, g => res(g.scene), undefined, rej));
 async function loadShips() {
   const shipScenes = await Promise.all(SHIPS.map(s => loadGLB(s.file)));
   SHIPS.forEach((s, i) => {
@@ -400,6 +407,9 @@ canvas.addEventListener('wheel', e => {
 const tele = document.getElementById('tele').children;
 function updateTele() { for (let i = 0; i < tele.length; i++) tele[i].classList.toggle('on', i === ship.level); }
 function throttle(d) { if (!playing) return; ship.level = Math.min(Math.max(ship.level + d, 0), 4); updateTele(); }
+const timeEl = document.getElementById('time').children;
+function setTime(i) { timeIdx = (i + TIME_STEPS.length) % TIME_STEPS.length; timeScale = TIME_STEPS[timeIdx]; for (let j = 0; j < timeEl.length; j++) timeEl[j].classList.toggle('on', j === timeIdx); }
+for (let j = 0; j < timeEl.length; j++) timeEl[j].addEventListener('click', () => setTime(j));
 function resetShip() { recenterTo(START.lat * DEG, START.lon * DEG); Object.assign(ship, { x: 0, z: 0, yaw: -START.heading * DEG, v: 0, level: 1, rudder: 0 }); spawnChecked = false; updateTele(); }
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
@@ -412,6 +422,7 @@ window.addEventListener('keydown', e => {
   if (k === 's' || k === 'arrowdown') throttle(-1);
   if (k === 'c') { cam.orbitYaw = 0; cam.orbitPitch = 0; cam.zoom = def.zoom; }
   if (k === 'r') resetShip();
+  if (k === 't') setTime(timeIdx + 1);
 });
 window.addEventListener('keyup', e => {
   const k = e.key.toLowerCase();
@@ -454,7 +465,7 @@ function recenterOnShip() {
   camera.position.x -= dx; camera.position.z -= dz;
   for (const w of wake) { w.x -= dx; w.z -= dz; }
   waveOff.x += dx; waveOff.y += dz;
-  calibrated = false; calibTimer = 0;
+  calibrated = false; calibTimer = 0; camGround = null;
 }
 // Cesium heights are ellipsoidal; its sea surface sits at the local geoid height.
 // Sample flat open water around the ship and move the world so that surface is y = 0.
@@ -494,7 +505,7 @@ const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 const clock = new THREE.Clock();
 const ease = (k, dt) => 1 - Math.exp(-k * dt);
 const desired = new THREE.Vector3();
-let t = 0, hudTimer = 0, landAhead = false;
+let t = 0, hudTimer = 0, landAhead = false, probeTimer = 0, camGroundTimer = 0, camGround = null;
 camera.position.set(0, 20, -40);
 
 function step() {
@@ -502,7 +513,8 @@ function step() {
   t += dt;
 
   // terrain housekeeping
-  styleTimer += dt; if (styleTimer > 0.25) { styleTimer = 0; styleTerrain(); }
+  if (tiles.errorTarget !== TERRAIN_ERROR) tiles.errorTarget = TERRAIN_ERROR; // the terrain plugin resets this on load
+  styleTimer += dt; if (styleDirty || styleTimer > 1.5) { styleTimer = 0; styleTerrain(); }
   if (terrainLoaded && !calibrated) { calibTimer += dt; if (calibTimer > 1.5) { calibTimer = 0; calibrated = calibrate(); } }
   if (terrainLoaded && calibrated && !spawnChecked) spawnChecked = checkSpawn();
   if (terrainLoaded && calibrated && spawnChecked && !terrainError) setStatus(null);
@@ -515,21 +527,24 @@ function step() {
     const target = THROTTLE[ship.level] * def.maxSpeed;
     ship.v += (target - ship.v) * ease(def.accel * (target === 0 ? 0.6 : 1), dt);
     const steer = Math.min(Math.abs(ship.v) / (def.maxSpeed * 0.3), 1) * Math.sign(ship.v);
-    ship.yaw += ship.rudder * def.turn * steer * dt;
+    ship.yaw += ship.rudder * def.turn * steer * dt * timeScale;
     const fx0 = Math.sin(ship.yaw), fz0 = Math.cos(ship.yaw);
     const cy = Math.cos(ship.yaw), sy = Math.sin(ship.yaw);
 
     // land check: probe ahead of the bow (or behind the stern when going astern)
-    landAhead = false;
-    if (terrainLoaded && calibrated && Math.abs(ship.v) > 0.05) {
-      const dir = Math.sign(ship.v), reach = (L * 0.5 + 4 + Math.abs(ship.v) * 1.5) * dir;
-      for (const [lx, lz] of [[0, reach], [W * 0.45, reach * 0.8], [-W * 0.45, reach * 0.8]]) {
-        const h = terrainAt(ship.x + lx * cy + lz * sy, ship.z - lx * sy + lz * cy);
-        if (h !== null && h > LAND_H) { landAhead = true; break; }
+    probeTimer += dt;
+    if (probeTimer > 0.12) {
+      probeTimer = 0; landAhead = false;
+      if (terrainLoaded && calibrated && Math.abs(ship.v) > 0.05) {
+        const dir = Math.sign(ship.v), reach = (L * 0.5 + 4 + Math.abs(ship.v) * (1.5 + 0.25 * timeScale)) * dir;
+        for (const [lx, lz] of [[0, reach], [W * 0.45, reach * 0.8], [-W * 0.45, reach * 0.8]]) {
+          const h = terrainAt(ship.x + lx * cy + lz * sy, ship.z - lx * sy + lz * cy);
+          if (h !== null && h > LAND_H) { landAhead = true; break; }
+        }
       }
     }
     if (landAhead) { ship.v *= 1 - ease(4, dt); if (Math.abs(ship.v) < 0.15) ship.v = 0; }
-    ship.x += fx0 * ship.v * dt; ship.z += fz0 * ship.v * dt;
+    ship.x += fx0 * ship.v * dt * timeScale; ship.z += fz0 * ship.v * dt * timeScale;
 
     // float: bow, stern, port, starboard
     const at = (lx, lz) => heightAt(ship.x + lx * cy + lz * sy, ship.z - lx * sy + lz * cy, t);
@@ -563,7 +578,7 @@ function step() {
     if (w.age > w.life) continue;
     w.age += dt; w.x += w.vx * dt; w.z += w.vz * dt; w.vx *= 1 - ease(0.4, dt); w.vz *= 1 - ease(0.4, dt);
     const k = Math.min(w.age / w.life, 1), s = w.s0 + k * w.grow;
-    _p.set(w.x, heightAt(w.x, w.z, t) + 0.15, w.z); _s.set(s, 1, s);
+    _p.set(w.x, dispAt(w.x, w.z, t, _d).y + 0.15, w.z); _s.set(s, 1, s);
     wakeMesh.setMatrixAt(i, _m.compose(_p, _q, _s));
     const b = (1 - k) * (1 - k) * 0.075 * w.power;
     wakeMesh.setColorAt(i, _c.setRGB(b, b, b));
@@ -580,7 +595,9 @@ function step() {
   desired.set(ship.x + Math.sin(cYaw) * Math.cos(cPitch) * z, ship.y + lookH + Math.sin(cPitch) * z, ship.z + Math.cos(cYaw) * Math.cos(cPitch) * z);
   camera.position.lerp(desired, cam.dragging ? 0.35 : ease(3, dt));
   let floor = heightAt(camera.position.x, camera.position.z, t) + 1.5;
-  if (terrainLoaded) { const g = terrainAt(camera.position.x, camera.position.z); if (g !== null) floor = Math.max(floor, g + 5); }
+  camGroundTimer += dt;
+  if (terrainLoaded && camGroundTimer > 0.2) { camGroundTimer = 0; camGround = terrainAt(camera.position.x, camera.position.z); }
+  if (camGround !== null) floor = Math.max(floor, camGround + 5);
   if (camera.position.y < floor) camera.position.y = floor;
   camera.lookAt(ship.x, ship.y + lookH, ship.z);
   camera.updateMatrixWorld();

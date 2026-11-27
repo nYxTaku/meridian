@@ -4,7 +4,19 @@ A browser-based sailing experience on a 3D model of the real Earth. Pick a real 
 
 Experience Design open brief project.
 
-**Live demo:** https://nyxtaku.github.io/meridian/
+**Live demo:** https://nyxtaku.github.io/meridian/ (prototype 03)
+Earlier versions: [prototype 02](https://nyxtaku.github.io/meridian/p02/)
+
+## Prototype 03: real world
+
+- Real terrain and coastlines streamed from Cesium ion (Cesium World Terrain + Bing aerial imagery), starting off Piraeus
+- Stylized look: real elevation, flat-shaded; satellite colours snapped to a small palette (scrub, soil, limestone, white towns, terracotta roofs)
+- Sea level calibrated from Cesium's sea surface (Cesium heights are ellipsoidal; around Piraeus the sea sits ~38 m above zero)
+- Ocean extends ~40 km and curves with the Earth
+- Land collision with a "land ahead" warning; floating origin re-centres the world every 3 km
+- Time speed ×1 / ×5 / ×20 / ×50
+- Latitude/longitude in the HUD
+- Performance: coarser terrain detail, limited tile processing per frame, throttled terrain raycasts
 
 ## Prototype 02: ships
 
@@ -38,6 +50,7 @@ Experience Design open brief project.
 | A / D | Rudder left / right |
 | C | Reset camera |
 | R | Reset ship |
+| T | Time speed ×1 / ×5 / ×20 / ×50 |
 
 On touch devices, on-screen buttons replace the keys.
 
@@ -53,8 +66,13 @@ npx serve .
 
 - [three.js](https://threejs.org) (loaded from jsDelivr)
 
-Planned: 3DTilesRendererJS + Cesium ion terrain, World Port Index, searoute-ts.
+- [3DTilesRendererJS](https://github.com/NASA-AMMOS/3DTilesRendererJS) with Cesium ion (terrain + imagery)
+
+Planned: World Port Index, searoute-ts.
 
 ## Credits
+
+Terrain and imagery: Cesium World Terrain and Bing Maps aerial imagery via Cesium ion. Imagery © Microsoft.
+
 
 3D models: "Full Low Poly Sea & Ships Pack" (https://skfb.ly/pIT9V) by Muyaya Concept is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/). Exported per model from the original file and scaled in code.

@@ -21,7 +21,8 @@
   .val { font-size:20px; }
   .val.sm { font-size:14px; }
   .tele { display:flex; gap:3px; margin-top:6px; }
-  .tele span { flex:1; text-align:center; font-size:9px; letter-spacing:0.04em; padding:5px 0; border:1.5px solid var(--ink); border-radius:999px; }
+  .tele span { cursor:default; flex:1; text-align:center; font-size:9px; letter-spacing:0.04em; padding:5px 0; border:1.5px solid var(--ink); border-radius:999px; }
+  #time span { cursor:pointer; }
   .tele span.on { background:var(--ink); color:var(--bg); }
   .rud { position:relative; height:10px; margin-top:8px; border:1.5px solid var(--ink); border-radius:999px; }
   .rud i { position:absolute; top:1px; bottom:1px; width:10px; margin-left:-5px; left:50%; background:var(--ink); border-radius:999px; }
@@ -98,6 +99,9 @@
     <div class="tele" id="tele"><span>ASTERN</span><span class="on">STOP</span><span>SLOW</span><span>HALF</span><span>FULL</span></div>
   </div>
   <div class="block"><span class="lbl">RUDDER</span><div class="rud"><i id="rud"></i></div></div>
+  <div class="block"><span class="lbl">TIME SPEED</span>
+    <div class="tele" id="time"><span class="on">×1</span><span>×5</span><span>×20</span><span>×50</span></div>
+  </div>
   <div class="block">
     <div class="top"><span class="lbl">SEA STATE</span><span class="small" id="seaLbl">MODERATE</span></div>
     <input type="range" id="sea" min="0" max="100" value="40" aria-label="Sea state">
@@ -108,6 +112,7 @@
 <div id="keys" class="panel">
   <div><b>W</b><b>S</b> throttle up / down</div>
   <div><b>A</b><b>D</b> rudder left / right</div>
+  <div><b>T</b> time speed ×1 / ×5 / ×20 / ×50</div>
   <div><b>C</b> reset camera · <b>R</b> reset ship</div>
   <div class="small">drag to look around · scroll to zoom</div>
 </div>
@@ -140,6 +145,6 @@
 <div id="attr"><a href="https://cesium.com/platform/cesium-ion/" target="_blank" rel="noopener">Powered by Cesium ion</a> · Imagery © Microsoft Bing · Models: Muyaya Concept (CC BY 4.0)</div>
 <div id="err">This prototype needs WebGL, which this browser or device doesn’t provide.</div>
 
-<script type="module" src="main.js?v=4"></script>
+<script type="module" src="main.js?v=5"></script>
 </body>
 </html>

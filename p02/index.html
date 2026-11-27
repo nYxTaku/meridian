@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meridian — Sailing Prototype 02</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anonymous+Pro:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Intel+One+Mono:wght@300..700&display=swap">
+<style>
+  :root { --bg:#ECEAE5; --ink:#1E1E1C; --muted:#4A4A46; --mint:#7FE3CB; --rule:#C9C6BF; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#c9dbe6; font-family:'Intel One Mono','Courier New',monospace; color:var(--ink); }
+  canvas#c { display:block; width:100%; height:100%; touch-action:none; }
+  .disp { font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; }
+  .panel { position:fixed; background:rgba(236,234,229,0.88); border:2px solid var(--mint); border-radius:16px; padding:14px 16px; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  #hud { left:16px; top:16px; width:270px; user-select:none; }
+  h1 { margin:0; font-size:26px; letter-spacing:-0.04em; line-height:1; }
+  .sub { margin:4px 0 12px; font-size:11px; letter-spacing:0.08em; }
+  .row { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-top:1px solid var(--rule); }
+  .lbl { font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; font-size:11px; letter-spacing:0.08em; }
+  .val { font-size:20px; }
+  .val.sm { font-size:14px; }
+  .tele { display:flex; gap:3px; margin-top:6px; }
+  .tele span { flex:1; text-align:center; font-size:9px; letter-spacing:0.04em; padding:5px 0; border:1.5px solid var(--ink); border-radius:999px; }
+  .tele span.on { background:var(--ink); color:var(--bg); }
+  .rud { position:relative; height:10px; margin-top:8px; border:1.5px solid var(--ink); border-radius:999px; }
+  .rud i { position:absolute; top:1px; bottom:1px; width:10px; margin-left:-5px; left:50%; background:var(--ink); border-radius:999px; }
+  .rud::after { content:''; position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:var(--muted); }
+  input[type=range] { width:100%; accent-color:#1E1E1C; margin:8px 0 0; }
+  .block { padding:6px 0; border-top:1px solid var(--rule); }
+  .block .top { display:flex; justify-content:space-between; }
+  .small { font-size:11px; color:var(--muted); }
+  .btns { display:flex; gap:6px; margin-top:10px; }
+  .btn { flex:1; cursor:pointer; background:transparent; color:var(--ink); border:1.5px solid var(--ink); border-radius:999px; padding:7px 0; font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; font-size:11px; letter-spacing:0.08em; }
+  .btn:hover { background:var(--ink); color:var(--bg); }
+  #keys { left:16px; bottom:16px; font-size:12px; line-height:1.7; padding:10px 14px; }
+  #keys b { font-family:'Anonymous Pro','Courier New',monospace; display:inline-block; min-width:22px; text-align:center; border:1.5px solid var(--ink); border-radius:6px; padding:0 4px; margin-right:4px; }
+
+  /* overlays */
+  .overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(236,234,229,0.55); padding:24px; overflow:auto; }
+  .overlay.show { display:flex; }
+  #select .wrap { width:min(1080px, 100%); }
+  #select h2 { margin:0; text-align:center; font-size:72px; letter-spacing:-0.06em; line-height:0.9; }
+  #select .subhead { text-align:center; margin:10px 0 26px; font-size:14px; letter-spacing:0.08em; }
+  .cards { display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; }
+  .card { background:var(--bg); border:3px solid var(--mint); border-radius:28px; padding:18px; cursor:pointer; text-align:left; font:inherit; color:inherit; transition:transform .15s ease, box-shadow .15s ease; }
+  .card:hover, .card:focus-visible { transform:translateY(-4px); box-shadow:0 10px 30px rgba(30,30,28,0.12); outline:none; }
+  .card img { width:100%; aspect-ratio:16/10; object-fit:contain; background:#E1DED7; border-radius:18px; display:block; }
+  .card .num { margin:14px 0 0; padding-bottom:8px; border-bottom:3px solid var(--ink); font-size:44px; letter-spacing:-0.04em; line-height:1; }
+  .card h3 { margin:12px 0 4px; font-size:20px; letter-spacing:0.02em; }
+  .card .meta { font-size:12px; color:var(--muted); margin-bottom:10px; }
+  .stat { display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:3px 0; }
+  .dots { display:flex; gap:4px; }
+  .dots i { width:12px; height:12px; border-radius:50%; border:1.5px solid var(--ink); }
+  .dots i.on { background:var(--ink); }
+  .card .go { margin-top:12px; text-align:center; padding:9px 0; border:2px solid var(--ink); border-radius:999px; font-size:13px; letter-spacing:0.08em; }
+  .card:hover .go { background:var(--ink); color:var(--bg); }
+  body.choosing #hud, body.choosing #keys, body.choosing #touch { display:none; }
+  #loading { text-align:center; font-size:14px; letter-spacing:0.08em; margin-top:8px; }
+
+  #about .box { background:var(--bg); border:3px solid var(--mint); border-radius:28px; padding:28px 32px; max-width:560px; font-size:14px; line-height:1.55; }
+  #about h2 { margin:0 0 12px; font-size:40px; letter-spacing:-0.05em; line-height:1; }
+  #about a { color:var(--ink); }
+  #about .btn { margin-top:18px; padding:9px 26px; flex:none; }
+
+  #touch { position:fixed; right:16px; bottom:16px; display:none; gap:10px; }
+  #touch button { width:64px; height:64px; border-radius:50%; border:2px solid var(--ink); background:rgba(236,234,229,0.88); font-family:'Anonymous Pro',monospace; font-weight:700; font-size:22px; color:var(--ink); touch-action:none; }
+  #err { position:fixed; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:24px; font-size:16px; background:var(--bg); }
+  @media (pointer:coarse) { #touch { display:flex; } #keys { display:none; } }
+  @media (max-width:820px) { .cards { grid-template-columns:1fr; } #select h2 { font-size:48px; } }
+  @media (max-width:600px) { #hud { width:210px; padding:10px 12px; } .val { font-size:16px; } }
+</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }</script>
+</head>
+<body class="choosing">
+<canvas id="c"></canvas>
+
+<div id="hud" class="panel">
+  <h1 class="disp">meridian</h1>
+  <div class="sub disp">SAILING PROTOTYPE 02</div>
+  <div class="row"><span class="lbl">SHIP</span><span class="val sm" id="shipName">—</span></div>
+  <div class="row"><span class="lbl">SPEED</span><span class="val" id="spd">0.0 kn</span></div>
+  <div class="row"><span class="lbl">HEADING</span><span class="val" id="hdg">000° N</span></div>
+  <div class="block"><span class="lbl">THROTTLE</span>
+    <div class="tele" id="tele"><span>ASTERN</span><span class="on">STOP</span><span>SLOW</span><span>HALF</span><span>FULL</span></div>
+  </div>
+  <div class="block"><span class="lbl">RUDDER</span><div class="rud"><i id="rud"></i></div></div>
+  <div class="block">
+    <div class="top"><span class="lbl">SEA STATE</span><span class="small" id="seaLbl">MODERATE</span></div>
+    <input type="range" id="sea" min="0" max="100" value="40" aria-label="Sea state">
+  </div>
+  <div class="btns"><button class="btn" id="changeShip">CHANGE SHIP</button><button class="btn" id="aboutBtn">ABOUT</button></div>
+</div>
+
+<div id="keys" class="panel">
+  <div><b>W</b><b>S</b> throttle up / down</div>
+  <div><b>A</b><b>D</b> rudder left / right</div>
+  <div><b>C</b> reset camera · <b>R</b> reset ship</div>
+  <div class="small">drag to look around · scroll to zoom</div>
+</div>
+
+<div id="touch">
+  <button id="tL" aria-label="Rudder left">◀</button>
+  <button id="tD" aria-label="Throttle down">▼</button>
+  <button id="tU" aria-label="Throttle up">▲</button>
+  <button id="tR" aria-label="Rudder right">▶</button>
+</div>
+
+<div id="select" class="overlay show"><div class="wrap">
+  <h2 class="disp">choose a ship</h2>
+  <div class="subhead disp">MERIDIAN — SAILING PROTOTYPE 02</div>
+  <div class="cards" id="cards"></div>
+  <div id="loading">LOADING SHIPS…</div>
+</div></div>
+
+<div id="about" class="overlay"><div class="box">
+  <h2 class="disp">about</h2>
+  <p>Meridian is a browser-based sailing experience on a 3D model of the real Earth. This is prototype 02: three ships with their own handling, on open water with placeholder islands.</p>
+  <p><b>3D models:</b> “Full Low Poly Sea &amp; Ships Pack” (<a href="https://skfb.ly/pIT9V" target="_blank" rel="noopener">https://skfb.ly/pIT9V</a>) by Muyaya Concept is licensed under Creative Commons Attribution (<a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">http://creativecommons.org/licenses/by/4.0/</a>). Scaled for use here.</p>
+  <p class="small">Built with three.js.</p>
+  <button class="btn" id="aboutClose">CLOSE</button>
+</div></div>
+
+<div id="err">This prototype needs WebGL, which this browser or device doesn’t provide.</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ---------- renderer / scene ----------
+const canvas = document.getElementById('c');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); }
+catch (e) { document.getElementById('err').style.display = 'flex'; throw e; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, 1, 0.5, 9000);
+
+const SUN_DIR = new THREE.Vector3(0.35, 0.22, -0.91).normalize();
+const C = { zenith: new THREE.Color('#4F86BA'), horizon: new THREE.Color('#C6D9E4'), deep: new THREE.Color('#0A3346'), crest: new THREE.Color('#2A8C8C') };
+const FOG_DENSITY = 1 / 1700;
+scene.fog = new THREE.FogExp2(C.horizon.getHex(), FOG_DENSITY);
+scene.add(new THREE.HemisphereLight(0xdfeaf2, 0x1d4a5c, 1.4));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
+sun.position.copy(SUN_DIR).multiplyScalar(200);
+scene.add(sun);
+
+// ---------- ships ----------
+const SHIPS = [
+  { id: 'fishing',   name: 'Fishing boat',   file: 'fishing_boat.glb',   scale: 1.0,  lift: 0.9, maxSpeed: 10.0, accel: 0.60, turn: 0.42, resp: 3.2, heel: 0.12, zoom: 24, pitch: 0.26,
+    stats: { speed: 5, turning: 5, stability: 2 }, blurb: 'Small and quick. Turns sharply, rides every wave.' },
+  { id: 'freighter', name: 'Freighter',      file: 'freighter.glb',      scale: 3.0,  lift: 0.5,  maxSpeed: 7.5,  accel: 0.20, turn: 0.15, resp: 1.5, heel: 0.05, zoom: 72, pitch: 0.32,
+    stats: { speed: 3, turning: 3, stability: 4 }, blurb: 'Mid-size cargo vessel. Steady, with a wider turn.' },
+  { id: 'container', name: 'Container ship', file: 'container_ship.glb', scale: 7.0,  lift: 0.6,  maxSpeed: 6.5,  accel: 0.13, turn: 0.075, resp: 0.9, heel: 0.02, zoom: 140, pitch: 0.38,
+    stats: { speed: 2, turning: 1, stability: 5 }, blurb: 'Large and heavy. Slow to speed up and to turn.' },
+];
+
+// ---------- waves (shared by GPU and CPU) ----------
+const WAVE_DEF = [[0.30, 60, 0.18], [1.10, 31, 0.14], [-0.60, 18, 0.12], [2.20, 9, 0.10], [-1.80, 5, 0.08]];
+const WAVES = WAVE_DEF.map(([ang, L, s]) => ({ dx: Math.cos(ang), dz: Math.sin(ang), L, s, k: 2 * Math.PI / L, c: Math.sqrt(9.8 / (2 * Math.PI / L)) }));
+let seaScale = 0.75;
+const smoothstep = (a, b, x) => { const t = Math.min(Math.max((x - a) / (b - a), 0), 1); return t * t * (3 - 2 * t); };
+const _d = { x: 0, y: 0, z: 0 };
+function dispAt(x, z, t, out) {
+  let ox = 0, oy = 0, oz = 0;
+  const dist = Math.hypot(camera.position.x - x, camera.position.z - z);
+  for (const w of WAVES) {
+    const st = w.s * seaScale * (1 - smoothstep(w.L * 4, w.L * 14, dist));
+    const f = w.k * (w.dx * x + w.dz * z - w.c * t);
+    const a = st / w.k, cf = Math.cos(f);
+    ox += w.dx * a * cf; oy += a * Math.sin(f); oz += w.dz * a * cf;
+  }
+  out.x = ox; out.y = oy; out.z = oz; return out;
+}
+function heightAt(x, z, t) {
+  let px = x, pz = z;
+  for (let i = 0; i < 3; i++) { dispAt(px, pz, t, _d); px = x - _d.x; pz = z - _d.z; }
+  return dispAt(px, pz, t, _d).y;
+}
+const totalAmp = () => WAVES.reduce((s, w) => s + (w.s * seaScale) / w.k, 0);
+
+// ---------- ocean ----------
+const OCEAN_R = 2800, SEG = 512, EXP = 1.8;
+const oceanGeo = new THREE.PlaneGeometry(2, 2, SEG, SEG);
+oceanGeo.rotateX(-Math.PI / 2);
+{ const p = oceanGeo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const u = p.getX(i), v = p.getZ(i);
+    p.setX(i, Math.sign(u) * OCEAN_R * Math.pow(Math.abs(u), EXP));
+    p.setZ(i, Math.sign(v) * OCEAN_R * Math.pow(Math.abs(v), EXP));
+  } }
+const oceanMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 }, uScale: { value: seaScale },
+    uWaves: { value: WAVES.map(w => new THREE.Vector4(w.dx, w.dz, w.s, w.L)) },
+    uSunDir: { value: SUN_DIR }, uDeep: { value: C.deep }, uCrest: { value: C.crest },
+    uZenith: { value: C.zenith }, uHorizon: { value: C.horizon }, uFogColor: { value: C.horizon },
+    uFogDensity: { value: FOG_DENSITY }, uFoamH: { value: 1 },
+  },
+  vertexShader: /* glsl */`
+    uniform float uTime; uniform float uScale; uniform vec4 uWaves[5];
+    varying vec3 vWorld; varying vec3 vNormal; varying float vCrest;
+    void main() {
+      vec3 p = (modelMatrix * vec4(position, 1.0)).xyz;
+      float dist = length(cameraPosition.xz - p.xz);
+      vec3 disp = vec3(0.0); vec3 t = vec3(1.0, 0.0, 0.0); vec3 b = vec3(0.0, 0.0, 1.0);
+      for (int i = 0; i < 5; i++) {
+        vec4 w = uWaves[i];
+        float L = w.w;
+        float steep = w.z * uScale * (1.0 - smoothstep(L * 4.0, L * 14.0, dist));
+        float k = 6.2831853 / L;
+        float c = sqrt(9.8 / k);
+        vec2 d = normalize(w.xy);
+        float f = k * (dot(d, p.xz) - c * uTime);
+        float a = steep / k;
+        float sf = sin(f); float cf = cos(f);
+        disp += vec3(d.x * a * cf, a * sf, d.y * a * cf);
+        t += vec3(-d.x * d.x * steep * sf, d.x * steep * cf, -d.x * d.y * steep * sf);
+        b += vec3(-d.x * d.y * steep * sf, d.y * steep * cf, -d.y * d.y * steep * sf);
+      }
+      vec3 wp = p + disp;
+      vNormal = normalize(cross(b, t));
+      vWorld = wp; vCrest = disp.y;
+      gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+    }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 uSunDir; uniform vec3 uDeep; uniform vec3 uCrest; uniform vec3 uZenith; uniform vec3 uHorizon;
+    uniform vec3 uFogColor; uniform float uFogDensity; uniform float uFoamH;
+    varying vec3 vWorld; varying vec3 vNormal; varying float vCrest;
+    void main() {
+      vec3 n = normalize(vNormal);
+      vec3 v = normalize(cameraPosition - vWorld);
+      float ndv = max(dot(n, v), 0.0);
+      float fres = 0.02 + 0.55 * pow(1.0 - ndv, 4.0);
+      vec3 r = reflect(-v, n);
+      float ry = clamp(r.y, 0.0, 1.0);
+      vec3 sky = mix(uHorizon, uZenith, pow(ry, 0.5)) * 0.82;
+      float crestMix = clamp(vCrest / (uFoamH * 2.0) + 0.5, 0.0, 1.0);
+      vec3 water = mix(uDeep, uCrest, crestMix * crestMix);
+      float sss = pow(max(dot(v, -uSunDir), 0.0), 4.0) * crestMix;
+      water += uCrest * sss * 0.5;
+      vec3 col = mix(water, sky, fres);
+      float spec = pow(max(dot(r, uSunDir), 0.0), 600.0);
+      col += vec3(1.0, 0.92, 0.8) * spec * 6.0;
+      float foam = smoothstep(uFoamH * 0.75, uFoamH * 1.3, vCrest);
+      col = mix(col, vec3(0.80, 0.86, 0.87), foam * 0.45);
+      float d = length(cameraPosition - vWorld);
+      float fog = 1.0 - exp(-pow(d * uFogDensity, 2.0));
+      col = mix(col, uFogColor, fog);
+      gl_FragColor = vec4(col, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+ocean.frustumCulled = false;
+scene.add(ocean);
+
+// ---------- sky ----------
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false,
+  uniforms: { uZenith: { value: C.zenith }, uHorizon: { value: C.horizon }, uSunDir: { value: SUN_DIR } },
+  vertexShader: /* glsl */`
+    varying vec3 vDir;
+    void main() { vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`,
+  fragmentShader: /* glsl */`
+    uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSunDir; varying vec3 vDir;
+    void main() {
+      vec3 d = normalize(vDir);
+      vec3 col = mix(uHorizon, uZenith, pow(clamp(d.y, 0.0, 1.0), 0.45));
+      float s = max(dot(d, uSunDir), 0.0);
+      col += vec3(1.0, 0.9, 0.72) * (pow(s, 900.0) * 18.0 + pow(s, 12.0) * 0.28);
+      gl_FragColor = vec4(col, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(4000, 32, 16), skyMat);
+sky.renderOrder = -1; sky.frustumCulled = false;
+scene.add(sky);
+
+// ---------- islands ----------
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rand = rng(7);
+const islands = [];
+const SAND = new THREE.Color('#D9CBA3'), GRASS = new THREE.Color('#5F7D4A'), ROCK = new THREE.Color('#7C776D');
+function makeIsland(x, z, r, h, seed) {
+  const BASE = -10;
+  const geo = new THREE.CylinderGeometry(r * 0.22, r, h, 36, 10);
+  geo.translate(0, h / 2 + BASE, 0);
+  const p = geo.attributes.position, col = [];
+  for (let i = 0; i < p.count; i++) {
+    const px = p.getX(i), py = p.getY(i), pz = p.getZ(i);
+    const ang = Math.atan2(pz, px);
+    const n = 1 + 0.16 * Math.sin(ang * 3 + seed) + 0.09 * Math.sin(ang * 7 + seed * 2.3) + 0.05 * Math.sin(ang * 13 + seed);
+    const bump = py > BASE + 1 ? Math.sin(px * 0.11 + seed) * Math.cos(pz * 0.09) * 2.5 : 0;
+    p.setXYZ(i, px * n, py + bump, pz * n);
+    const yy = py + bump;
+    const c = yy < 1.8 ? SAND : (yy < (h + BASE) * 0.62 ? GRASS : ROCK);
+    col.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 }));
+  m.position.set(x, 0, z);
+  scene.add(m);
+  const rWater = r * (1 - 0.78 * (-BASE / h));
+  islands.push({ x, z, r: rWater * 1.02, rFull: r, h, base: BASE, seed });
+}
+for (let i = 0; i < 9; i++) {
+  let x, z, r, h;
+  do { // keep the water behind the start position clear for the chase camera
+    const ang = rand() * Math.PI * 2, dist = 260 + rand() * 800;
+    r = 60 + rand() * 140; h = 25 + rand() * 55;
+    x = Math.cos(ang) * dist; z = Math.sin(ang) * dist - 200;
+  } while (z + r > -120 && Math.abs(x) - r < 320);
+  makeIsland(x, z, r, h, rand() * 10);
+}
+
+function landHeight(x, z) {
+  let y = -Infinity;
+  for (const s of islands) {
+    const d = Math.hypot(x - s.x, z - s.z) / 1.3; // 1.3 covers the coastline noise
+    if (d < s.rFull) y = Math.max(y, Math.min(s.base + s.h, s.base + s.h * (s.rFull - d) / (0.78 * s.rFull)) + 3);
+  }
+  return y;
+}
+
+// ---------- wake ----------
+const WAKE_N = 260;
+const foamTex = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const wakeGeo = new THREE.PlaneGeometry(1, 1); wakeGeo.rotateX(-Math.PI / 2);
+const wakeMesh = new THREE.InstancedMesh(wakeGeo, new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), WAKE_N);
+wakeMesh.frustumCulled = false;
+const wake = Array.from({ length: WAKE_N }, () => ({ x: 0, z: 0, vx: 0, vz: 0, age: 99, life: 1, s0: 1, grow: 1, power: 0 }));
+let wakeIdx = 0, wakeTimer = 0;
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
+for (let i = 0; i < WAKE_N; i++) { wakeMesh.setMatrixAt(i, _m.makeScale(0, 0, 0)); wakeMesh.setColorAt(i, _c.setRGB(0, 0, 0)); }
+scene.add(wakeMesh);
+function spawnWake(x, z, vx, vz, s0, grow, life, power) {
+  const w = wake[wakeIdx]; wakeIdx = (wakeIdx + 1) % WAKE_N;
+  Object.assign(w, { x, z, vx, vz, s0, grow, life, power, age: 0 });
+}
+
+// ---------- state ----------
+const THROTTLE = [-0.25, 0, 0.35, 0.65, 1.0];
+const ship = { x: 0, z: 0, yaw: Math.PI, v: 0, level: 1, rudder: 0, y: 0, pitch: 0, roll: 0 };
+let def = null, shipObj = null, L = 8, W = 4;
+const input = { left: false, right: false };
+let playing = false;
+const shipRoot = new THREE.Group(); scene.add(shipRoot);
+
+// ---------- loading models ----------
+const loader = new GLTFLoader();
+const loadGLB = f => new Promise((res, rej) => loader.load('../assets/models/' + f, g => res(g.scene), undefined, rej));
+const buoys = [];
+
+async function loadAll() {
+  const shipScenes = await Promise.all(SHIPS.map(s => loadGLB(s.file)));
+  SHIPS.forEach((s, i) => {
+    const g = new THREE.Group(); const m = shipScenes[i]; m.scale.setScalar(s.scale);
+    m.position.y = s.lift * s.scale; // raise the painted waterline to sea level
+    g.add(m);
+    const box = new THREE.Box3().setFromObject(g); const size = box.getSize(new THREE.Vector3());
+    s.obj = g; s.L = size.z; s.W = size.x; s.H = size.y;
+  });
+  makeCards();
+
+  // buoys and lighthouse load in the background
+  const [ba, bb, bc, bd, be, mr, mo, lh] = await Promise.all(
+    ['buoy_a.glb', 'buoy_b.glb', 'buoy_c.glb', 'buoy_d.glb', 'buoy_e.glb', 'mini_buoy_red.glb', 'mini_buoy_orange.glb', 'lighthouse.glb'].map(loadGLB));
+  const big = [ba, bb, ba, bb, bc, bd, be], small = [mr, mo];
+  for (let i = 0; i < 34; i++) {
+    const isBig = i % 3 !== 2;
+    const src = isBig ? big[i % big.length] : small[i % 2];
+    const g = new THREE.Group(); const m = src.clone(); m.scale.setScalar(isBig ? 0.7 : 1.1); g.add(m);
+    let x, z, ok, tries = 0;
+    do { x = (rand() - 0.5) * 1500; z = (rand() - 0.5) * 1500 - 200; tries++;
+      ok = Math.hypot(x, z) > 80 && islands.every(s => Math.hypot(s.x - x, s.z - z) > s.r + 20); } while (!ok && tries < 50);
+    g.position.set(x, 0, z); scene.add(g); buoys.push(g);
+  }
+  // lighthouse on the island closest to the start
+  const isl = islands.slice().sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0]; // nearest island, in view from the start
+  const dir = Math.atan2(-isl.z, -isl.x);
+  const rr = isl.r * 0.62;
+  const y = isl.base + isl.h * (isl.rFull - rr / 1.0) / (0.78 * isl.rFull);
+  const l = lh.clone(); l.scale.setScalar(2.2);
+  l.position.set(isl.x + Math.cos(dir) * rr, Math.max(y, 0.5), isl.z + Math.sin(dir) * rr);
+  l.rotation.y = -dir + Math.PI / 2;
+  scene.add(l);
+}
+
+// ---------- ship select ----------
+const cardsEl = document.getElementById('cards');
+function thumbnail(s) {
+  const tr = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  tr.setSize(480, 300); tr.outputColorSpace = THREE.SRGBColorSpace;
+  const ts = new THREE.Scene();
+  ts.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.0));
+  const dl = new THREE.DirectionalLight(0xffffff, 2.0); dl.position.set(4, 6, 5); ts.add(dl);
+  const o = s.obj.clone(); ts.add(o);
+  const box = new THREE.Box3().setFromObject(o); const c = box.getCenter(new THREE.Vector3()); const r = box.getSize(new THREE.Vector3()).length() / 2;
+  const tc = new THREE.PerspectiveCamera(30, 480 / 300, 0.1, 5000);
+  tc.position.set(c.x + r * 2.1, c.y + r * 1.0, c.z + r * 2.4); tc.lookAt(c);
+  tr.render(ts, tc);
+  const url = tr.domElement.toDataURL('image/png');
+  tr.dispose(); tr.forceContextLoss();
+  return url;
+}
+function dots(n) { return '<span class="dots">' + [1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'on' : ''}"></i>`).join('') + '</span>'; }
+function makeCards() {
+  cardsEl.innerHTML = '';
+  SHIPS.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.className = 'card';
+    b.innerHTML = `<img alt="${s.name}" src="${thumbnail(s)}">
+      <div class="num disp">0${i + 1}</div>
+      <h3 class="disp">${s.name.toUpperCase()}</h3>
+      <div class="meta">${Math.round(s.L)} m long · top speed ${(s.maxSpeed * 1.94384).toFixed(0)} kn<br>${s.blurb}</div>
+      <div class="stat"><span class="lbl">SPEED</span>${dots(s.stats.speed)}</div>
+      <div class="stat"><span class="lbl">TURNING</span>${dots(s.stats.turning)}</div>
+      <div class="stat"><span class="lbl">STABILITY</span>${dots(s.stats.stability)}</div>
+      <div class="go disp">SAIL — ${i + 1}</div>`;
+    b.addEventListener('click', () => chooseShip(i));
+    cardsEl.appendChild(b);
+  });
+  document.getElementById('loading').style.display = 'none';
+}
+function chooseShip(i) {
+  def = SHIPS[i];
+  if (shipObj) shipRoot.remove(shipObj);
+  shipObj = def.obj; shipRoot.add(shipObj);
+  L = def.L; W = def.W;
+  ship.v = 0; ship.level = 1; ship.rudder = 0; updateTele();
+  for (const s of islands) { // move away from land if the new hull overlaps
+    const d = Math.hypot(ship.x - s.x, ship.z - s.z), min = s.r + L * 0.5;
+    if (d < min) { ship.x = s.x + (ship.x - s.x) / d * min; ship.z = s.z + (ship.z - s.z) / d * min; }
+  }
+  cam.zoom = def.zoom; cam.orbitYaw = 0; cam.orbitPitch = 0;
+  document.getElementById('shipName').textContent = def.name;
+  document.getElementById('select').classList.remove('show'); document.body.classList.remove('choosing');
+  playing = true; window.focus();
+}
+function openSelect() { document.body.classList.add('choosing'); playing = false; input.left = input.right = false; document.getElementById('select').classList.add('show'); }
+document.getElementById('changeShip').addEventListener('click', openSelect);
+const about = document.getElementById('about');
+document.getElementById('aboutBtn').addEventListener('click', () => { about.classList.add('show'); });
+document.getElementById('aboutClose').addEventListener('click', () => { about.classList.remove('show'); });
+
+// ---------- camera control ----------
+const cam = { orbitYaw: 0, orbitPitch: 0, zoom: 26, dragging: false, lastX: 0, lastY: 0, idle: 0, spin: 0 };
+canvas.addEventListener('pointerdown', e => { cam.dragging = true; cam.lastX = e.clientX; cam.lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  if (!cam.dragging) return;
+  cam.orbitYaw -= (e.clientX - cam.lastX) * 0.006;
+  cam.orbitPitch = Math.min(Math.max(cam.orbitPitch + (e.clientY - cam.lastY) * 0.004, -0.22), 0.9);
+  cam.lastX = e.clientX; cam.lastY = e.clientY; cam.idle = 0;
+});
+canvas.addEventListener('pointerup', () => { cam.dragging = false; });
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const base = def ? def.zoom : 26;
+  cam.zoom = Math.min(Math.max(cam.zoom * (1 + e.deltaY * 0.001), base * 0.45), base * 4);
+}, { passive: false });
+
+// ---------- input ----------
+const tele = document.getElementById('tele').children;
+function updateTele() { for (let i = 0; i < tele.length; i++) tele[i].classList.toggle('on', i === ship.level); }
+function throttle(d) { if (!playing) return; ship.level = Math.min(Math.max(ship.level + d, 0), 4); updateTele(); }
+function resetShip() { Object.assign(ship, { x: 0, z: 0, yaw: Math.PI, v: 0, level: 1, rudder: 0 }); updateTele(); }
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  if (!playing) { if (['1', '2', '3'].includes(k) && def !== undefined && SHIPS[0].obj) chooseShip(+k - 1); return; }
+  if (k === 'a' || k === 'arrowleft') input.left = true;
+  if (k === 'd' || k === 'arrowright') input.right = true;
+  if (e.repeat) return;
+  if (k === 'w' || k === 'arrowup') throttle(1);
+  if (k === 's' || k === 'arrowdown') throttle(-1);
+  if (k === 'c') { cam.orbitYaw = 0; cam.orbitPitch = 0; cam.zoom = def.zoom; }
+  if (k === 'r') resetShip();
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'a' || k === 'arrowleft') input.left = false;
+  if (k === 'd' || k === 'arrowright') input.right = false;
+});
+const hold = (id, on, off) => { const b = document.getElementById(id); b.addEventListener('pointerdown', e => { e.preventDefault(); on(); }); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => b.addEventListener(t, off)); };
+hold('tL', () => { if (playing) input.left = true; }, () => input.left = false);
+hold('tR', () => { if (playing) input.right = true; }, () => input.right = false);
+hold('tU', () => throttle(1), () => {});
+hold('tD', () => throttle(-1), () => {});
+
+const sea = document.getElementById('sea'), seaLbl = document.getElementById('seaLbl');
+function setSea() {
+  const v = +sea.value / 100;
+  seaScale = 0.3 + 1.1 * v;
+  oceanMat.uniforms.uScale.value = seaScale;
+  oceanMat.uniforms.uFoamH.value = totalAmp() * 0.55;
+  seaLbl.textContent = v < 0.25 ? 'CALM' : v < 0.6 ? 'MODERATE' : v < 0.85 ? 'ROUGH' : 'VERY ROUGH';
+}
+sea.addEventListener('input', setSea); setSea();
+
+function resize() { const w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+window.addEventListener('resize', resize); resize();
+
+// ---------- loop ----------
+const spd = document.getElementById('spd'), hdg = document.getElementById('hdg'), rud = document.getElementById('rud');
+const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const clock = new THREE.Clock();
+const ease = (k, dt) => 1 - Math.exp(-k * dt);
+const desired = new THREE.Vector3();
+let t = 0;
+camera.position.set(0, 12, 40);
+
+function step() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  t += dt;
+
+  if (def) {
+    // helm
+    const rTarget = playing ? (input.left ? 1 : 0) - (input.right ? 1 : 0) : 0;
+    ship.rudder += (rTarget - ship.rudder) * ease(3, dt);
+    const target = THROTTLE[ship.level] * def.maxSpeed;
+    ship.v += (target - ship.v) * ease(def.accel * (target === 0 ? 0.6 : 1), dt);
+    const steer = Math.min(Math.abs(ship.v) / (def.maxSpeed * 0.3), 1) * Math.sign(ship.v);
+    ship.yaw += ship.rudder * def.turn * steer * dt;
+    const fx0 = Math.sin(ship.yaw), fz0 = Math.cos(ship.yaw);
+    ship.x += fx0 * ship.v * dt; ship.z += fz0 * ship.v * dt;
+    for (const s of islands) {
+      const dx = ship.x - s.x, dz = ship.z - s.z, d = Math.hypot(dx, dz), min = s.r + W * 0.5;
+      if (d < min) { ship.x = s.x + dx / d * min; ship.z = s.z + dz / d * min; ship.v *= 1 - ease(1.5, dt); }
+    }
+
+    // float: bow, stern, port, starboard
+    const cy = Math.cos(ship.yaw), sy = Math.sin(ship.yaw);
+    const at = (lx, lz) => heightAt(ship.x + lx * cy + lz * sy, ship.z - lx * sy + lz * cy, t);
+    const hl = L * 0.42, hw = W * 0.45;
+    const hBow = at(0, hl), hStern = at(0, -hl), hPort = at(hw, 0), hStbd = at(-hw, 0);
+    const yT = (hBow + hStern + hPort + hStbd) / 4;
+    const pitchT = Math.atan2(hBow - hStern, hl * 2);
+    const rollT = Math.atan2(hPort - hStbd, hw * 2) - ship.rudder * (ship.v / def.maxSpeed) * def.heel;
+    ship.y += (yT - ship.y) * ease(def.resp * 1.3, dt);
+    ship.pitch += (pitchT - ship.pitch) * ease(def.resp, dt);
+    ship.roll += (rollT - ship.roll) * ease(def.resp * 0.8, dt);
+    shipRoot.position.set(ship.x, ship.y, ship.z);
+    shipRoot.rotation.set(-ship.pitch, ship.yaw, ship.roll, 'YXZ');
+
+    // wake: stern trail + V from the bow quarters
+    const sp = Math.abs(ship.v), pw = Math.min(sp / (def.maxSpeed * 0.6), 1);
+    wakeTimer += dt;
+    const every = 0.09 - 0.05 * pw;
+    if (sp > def.maxSpeed * 0.06 && wakeTimer > every) {
+      wakeTimer = 0;
+      const lat = (Math.random() - 0.5) * W * 0.25;
+      spawnWake(ship.x - fx0 * L * 0.48 + lat * cy, ship.z - fz0 * L * 0.48 - lat * sy, 0, 0, W * 0.55, W * 1.6, 7 + Math.random() * 2, pw);
+      for (const side of [1, -1]) {
+        const lx = side * W * 0.5, lz = L * 0.25;
+        const out = (0.6 + sp * 0.12) * side;
+        spawnWake(ship.x + lx * cy + lz * sy, ship.z - lx * sy + lz * cy, out * cy, -out * sy, W * 0.25, W * 0.9, 5 + Math.random() * 1.5, pw * 0.8);
+      }
+    }
+  }
+  for (let i = 0; i < WAKE_N; i++) {
+    const w = wake[i];
+    if (w.age > w.life) continue;
+    w.age += dt; w.x += w.vx * dt; w.z += w.vz * dt; w.vx *= 1 - ease(0.4, dt); w.vz *= 1 - ease(0.4, dt);
+    const k = Math.min(w.age / w.life, 1), s = w.s0 + k * w.grow;
+    _p.set(w.x, heightAt(w.x, w.z, t) + 0.15, w.z); _s.set(s, 1, s);
+    wakeMesh.setMatrixAt(i, _m.compose(_p, _q, _s));
+    const b = (1 - k) * (1 - k) * 0.075 * w.power;
+    wakeMesh.setColorAt(i, _c.setRGB(b, b, b));
+  }
+  wakeMesh.instanceMatrix.needsUpdate = true;
+  if (wakeMesh.instanceColor) wakeMesh.instanceColor.needsUpdate = true;
+
+  for (const g of buoys) {
+    g.position.y = heightAt(g.position.x, g.position.z, t) - 0.1;
+    g.rotation.z = Math.sin(t * 1.3 + g.position.x) * 0.12 * seaScale;
+    g.rotation.x = Math.cos(t * 1.1 + g.position.z) * 0.12 * seaScale;
+  }
+
+  // camera: chase while playing, slow orbit on the select screen
+  if (!playing) cam.spin += dt * 0.12;
+  if (!cam.dragging && playing) { cam.idle += dt; if (cam.idle > 2.5 && Math.abs(ship.v) > 1) { cam.orbitYaw *= 1 - ease(0.8, dt); cam.orbitPitch *= 1 - ease(0.8, dt); } }
+  const z = def ? cam.zoom : 40, lookH = def ? Math.max(2, def.H * 0.35) : 2;
+  const cYaw = ship.yaw + Math.PI + cam.orbitYaw + (playing ? 0 : cam.spin + 0.9);
+  const cPitch = (def ? def.pitch : 0.28) + cam.orbitPitch;
+  desired.set(ship.x + Math.sin(cYaw) * Math.cos(cPitch) * z, ship.y + lookH + Math.sin(cPitch) * z, ship.z + Math.cos(cYaw) * Math.cos(cPitch) * z);
+  camera.position.lerp(desired, cam.dragging ? 0.35 : ease(3, dt));
+  const floor = Math.max(heightAt(camera.position.x, camera.position.z, t) + 1.5, landHeight(camera.position.x, camera.position.z) + 4);
+  if (camera.position.y < floor) camera.position.y = floor;
+  camera.lookAt(ship.x, ship.y + lookH, ship.z);
+
+  ocean.position.set(Math.round(camera.position.x / 8) * 8, 0, Math.round(camera.position.z / 8) * 8);
+  sky.position.copy(camera.position);
+  oceanMat.uniforms.uTime.value = t;
+
+  const fx = Math.sin(ship.yaw), fz = Math.cos(ship.yaw);
+  spd.textContent = (ship.v * 1.94384).toFixed(1) + ' kn';
+  const deg = (Math.atan2(fx, -fz) * 180 / Math.PI + 360) % 360;
+  hdg.textContent = String(Math.round(deg) % 360).padStart(3, '0') + '° ' + DIRS[Math.round(deg / 45) % 8];
+  rud.style.left = (50 - ship.rudder * 45) + '%';
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(step);
+}
+requestAnimationFrame(step);
+
+loadAll().catch(e => { document.getElementById('loading').textContent = 'COULD NOT LOAD THE SHIP MODELS. RELOAD TO TRY AGAIN.'; console.error(e); });
+</script>
+</body>
+</html>
