@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meridian — Prototype 03: Real World</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anonymous+Pro:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Intel+One+Mono:wght@300..700&display=swap">
+<style>
+  :root { --bg:#ECEAE5; --ink:#1E1E1C; --muted:#4A4A46; --mint:#7FE3CB; --rule:#C9C6BF; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#c9dbe6; font-family:'Intel One Mono','Courier New',monospace; color:var(--ink); }
+  canvas#c { display:block; width:100%; height:100%; touch-action:none; }
+  .disp { font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; }
+  .panel { position:fixed; background:rgba(236,234,229,0.88); border:2px solid var(--mint); border-radius:16px; padding:14px 16px; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  #hud { left:16px; top:16px; width:270px; user-select:none; }
+  h1 { margin:0; font-size:26px; letter-spacing:-0.04em; line-height:1; }
+  .sub { margin:4px 0 12px; font-size:11px; letter-spacing:0.08em; }
+  .row { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-top:1px solid var(--rule); }
+  .lbl { font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; font-size:11px; letter-spacing:0.08em; }
+  .val { font-size:20px; }
+  .val.sm { font-size:14px; }
+  .tele { display:flex; gap:3px; margin-top:6px; }
+  .tele span { flex:1; text-align:center; font-size:9px; letter-spacing:0.04em; padding:5px 0; border:1.5px solid var(--ink); border-radius:999px; }
+  .tele span.on { background:var(--ink); color:var(--bg); }
+  .rud { position:relative; height:10px; margin-top:8px; border:1.5px solid var(--ink); border-radius:999px; }
+  .rud i { position:absolute; top:1px; bottom:1px; width:10px; margin-left:-5px; left:50%; background:var(--ink); border-radius:999px; }
+  .rud::after { content:''; position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:var(--muted); }
+  input[type=range] { width:100%; accent-color:#1E1E1C; margin:8px 0 0; }
+  .block { padding:6px 0; border-top:1px solid var(--rule); }
+  .block .top { display:flex; justify-content:space-between; }
+  .small { font-size:11px; color:var(--muted); }
+  .btns { display:flex; gap:6px; margin-top:10px; }
+  .btn { flex:1; cursor:pointer; background:transparent; color:var(--ink); border:1.5px solid var(--ink); border-radius:999px; padding:7px 0; font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; font-size:11px; letter-spacing:0.08em; }
+  .btn:hover { background:var(--ink); color:var(--bg); }
+  #keys { left:16px; bottom:16px; font-size:12px; line-height:1.7; padding:10px 14px; }
+  #keys b { font-family:'Anonymous Pro','Courier New',monospace; display:inline-block; min-width:22px; text-align:center; border:1.5px solid var(--ink); border-radius:6px; padding:0 4px; margin-right:4px; }
+
+  /* overlays */
+  .overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(236,234,229,0.55); padding:24px; overflow:auto; }
+  .overlay.show { display:flex; }
+  #select .wrap { width:min(1080px, 100%); }
+  #select h2 { margin:0; text-align:center; font-size:72px; letter-spacing:-0.06em; line-height:0.9; }
+  #select .subhead { text-align:center; margin:10px 0 26px; font-size:14px; letter-spacing:0.08em; }
+  .cards { display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; }
+  .card { background:var(--bg); border:3px solid var(--mint); border-radius:28px; padding:18px; cursor:pointer; text-align:left; font:inherit; color:inherit; transition:transform .15s ease, box-shadow .15s ease; }
+  .card:hover, .card:focus-visible { transform:translateY(-4px); box-shadow:0 10px 30px rgba(30,30,28,0.12); outline:none; }
+  .card img { width:100%; aspect-ratio:16/10; object-fit:contain; background:#E1DED7; border-radius:18px; display:block; }
+  .card .num { margin:14px 0 0; padding-bottom:8px; border-bottom:3px solid var(--ink); font-size:44px; letter-spacing:-0.04em; line-height:1; }
+  .card h3 { margin:12px 0 4px; font-size:20px; letter-spacing:0.02em; }
+  .card .meta { font-size:12px; color:var(--muted); margin-bottom:10px; }
+  .stat { display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:3px 0; }
+  .dots { display:flex; gap:4px; }
+  .dots i { width:12px; height:12px; border-radius:50%; border:1.5px solid var(--ink); }
+  .dots i.on { background:var(--ink); }
+  .card .go { margin-top:12px; text-align:center; padding:9px 0; border:2px solid var(--ink); border-radius:999px; font-size:13px; letter-spacing:0.08em; }
+  .card:hover .go { background:var(--ink); color:var(--bg); }
+  body.choosing #hud, body.choosing #keys, body.choosing #touch { display:none; }
+  #loading { text-align:center; font-size:14px; letter-spacing:0.08em; margin-top:8px; }
+
+  #about .box { background:var(--bg); border:3px solid var(--mint); border-radius:28px; padding:28px 32px; max-width:560px; font-size:14px; line-height:1.55; }
+  #about h2 { margin:0 0 12px; font-size:40px; letter-spacing:-0.05em; line-height:1; }
+  #about a { color:var(--ink); }
+  #about .btn { margin-top:18px; padding:9px 26px; flex:none; }
+
+  #touch { position:fixed; right:16px; bottom:16px; display:none; gap:10px; }
+  #touch button { width:64px; height:64px; border-radius:50%; border:2px solid var(--ink); background:rgba(236,234,229,0.88); font-family:'Anonymous Pro',monospace; font-weight:700; font-size:22px; color:var(--ink); touch-action:none; }
+  #status { right:16px; top:16px; font-size:12px; letter-spacing:0.08em; padding:8px 14px; font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; }
+  #status.hide { display:none; }
+  #warn { position:fixed; left:50%; top:18px; transform:translateX(-50%); display:none; background:#1E1E1C; color:#ECEAE5; border-radius:999px; padding:9px 22px; font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; font-size:13px; letter-spacing:0.08em; }
+  #warn.show { display:block; }
+  #attr { position:fixed; right:12px; bottom:8px; font-size:10px; color:#1E1E1C; background:rgba(236,234,229,0.75); padding:3px 8px; border-radius:6px; }
+  #attr a { color:inherit; }
+  body.choosing #warn { display:none; }
+  #err { position:fixed; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:24px; font-size:16px; background:var(--bg); }
+  @media (pointer:coarse) { #touch { display:flex; } #keys { display:none; } }
+  @media (max-width:820px) { .cards { grid-template-columns:1fr; } #select h2 { font-size:48px; } }
+  @media (max-width:600px) { #hud { width:210px; padding:10px 12px; } .val { font-size:16px; } }
+</style>
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+  "3d-tiles-renderer": "https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.5.4/build/index.js",
+  "3d-tiles-renderer/plugins": "https://cdn.jsdelivr.net/npm/3d-tiles-renderer@0.5.4/build/index.plugins.js"
+} }</script>
+</head>
+<body class="choosing">
+<canvas id="c"></canvas>
+
+<div id="hud" class="panel">
+  <h1 class="disp">meridian</h1>
+  <div class="sub disp">PROTOTYPE 03 — REAL WORLD</div>
+  <div class="row"><span class="lbl">SHIP</span><span class="val sm" id="shipName">—</span></div>
+  <div class="row"><span class="lbl">SPEED</span><span class="val" id="spd">0.0 kn</span></div>
+  <div class="row"><span class="lbl">HEADING</span><span class="val" id="hdg">000° N</span></div>
+  <div class="row"><span class="lbl">POSITION</span><span class="val sm" id="pos">—</span></div>
+  <div class="block"><span class="lbl">THROTTLE</span>
+    <div class="tele" id="tele"><span>ASTERN</span><span class="on">STOP</span><span>SLOW</span><span>HALF</span><span>FULL</span></div>
+  </div>
+  <div class="block"><span class="lbl">RUDDER</span><div class="rud"><i id="rud"></i></div></div>
+  <div class="block">
+    <div class="top"><span class="lbl">SEA STATE</span><span class="small" id="seaLbl">MODERATE</span></div>
+    <input type="range" id="sea" min="0" max="100" value="40" aria-label="Sea state">
+  </div>
+  <div class="btns"><button class="btn" id="changeShip">CHANGE SHIP</button><button class="btn" id="aboutBtn">ABOUT</button></div>
+</div>
+
+<div id="keys" class="panel">
+  <div><b>W</b><b>S</b> throttle up / down</div>
+  <div><b>A</b><b>D</b> rudder left / right</div>
+  <div><b>C</b> reset camera · <b>R</b> reset ship</div>
+  <div class="small">drag to look around · scroll to zoom</div>
+</div>
+
+<div id="touch">
+  <button id="tL" aria-label="Rudder left">◀</button>
+  <button id="tD" aria-label="Throttle down">▼</button>
+  <button id="tU" aria-label="Throttle up">▲</button>
+  <button id="tR" aria-label="Rudder right">▶</button>
+</div>
+
+<div id="select" class="overlay show"><div class="wrap">
+  <h2 class="disp">choose a ship</h2>
+  <div class="subhead disp">MERIDIAN — PROTOTYPE 03 — STARTING OFF PIRAEUS</div>
+  <div class="cards" id="cards"></div>
+  <div id="loading">LOADING SHIPS…</div>
+</div></div>
+
+<div id="about" class="overlay"><div class="box">
+  <h2 class="disp">about</h2>
+  <p>Meridian is a browser-based sailing experience on a 3D model of the real Earth. This is prototype 03: real terrain and coastlines streamed from Cesium ion, starting off Piraeus in the Saronic Gulf.</p>
+  <p><b>3D models:</b> “Full Low Poly Sea &amp; Ships Pack” (<a href="https://skfb.ly/pIT9V" target="_blank" rel="noopener">https://skfb.ly/pIT9V</a>) by Muyaya Concept is licensed under Creative Commons Attribution (<a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">http://creativecommons.org/licenses/by/4.0/</a>). Scaled for use here.</p>
+  <p><b>Terrain and imagery:</b> Cesium World Terrain and Bing Maps aerial imagery, streamed via <a href="https://cesium.com/platform/cesium-ion/" target="_blank" rel="noopener">Cesium ion</a>. Imagery © Microsoft. Colours simplified for the stylized look.</p>
+  <p class="small">Built with three.js and 3DTilesRendererJS.</p>
+  <button class="btn" id="aboutClose">CLOSE</button>
+</div></div>
+
+<div id="status" class="panel">LOADING TERRAIN…</div>
+<div id="warn">LAND AHEAD — REVERSE OR TURN</div>
+<div id="attr"><a href="https://cesium.com/platform/cesium-ion/" target="_blank" rel="noopener">Powered by Cesium ion</a> · Imagery © Microsoft Bing · Models: Muyaya Concept (CC BY 4.0)</div>
+<div id="err">This prototype needs WebGL, which this browser or device doesn’t provide.</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
