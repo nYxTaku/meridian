@@ -261,7 +261,13 @@ ${origProject}
 ${origAlphamap}
 `;
 }
+function fixMask(tex) {
+  // the terrain loader asks for mipmaps on the water mask but never generates them,
+  // which leaves the texture unsampleable; plain linear filtering works
+  if (tex && tex.minFilter !== THREE.LinearFilter) { tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.needsUpdate = true; }
+}
 function styleMaterial(mat) {
+  fixMask(mat.roughnessMap);
   if (mat.defines && mat.defines.STYLIZED) return; // clones keep the define
   mat.defines = { ...(mat.defines || {}), STYLIZED: 1 };
   mat.flatShading = true;
