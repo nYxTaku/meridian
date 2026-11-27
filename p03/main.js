@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TilesRenderer } from '3d-tiles-renderer';
-import { CesiumIonAuthPlugin, ImageOverlayPlugin, CesiumIonOverlay, ReorientationPlugin, TilesFadePlugin } from '3d-tiles-renderer/plugins';
+import { CesiumIonAuthPlugin, ImageOverlayPlugin, CesiumIonOverlay, ReorientationPlugin } from '3d-tiles-renderer/plugins';
 
 // ---------- config ----------
 // Public token, restricted in Cesium ion to https://nyxtaku.github.io and localhost:3000.
@@ -186,7 +186,6 @@ tiles.registerPlugin(new CesiumIonAuthPlugin({ apiToken: ION_TOKEN, assetId: TER
 tiles.registerPlugin(new ImageOverlayPlugin({ renderer, overlays: [new CesiumIonOverlay({ apiToken: ION_TOKEN, assetId: IMAGERY_ASSET, autoRefreshToken: true })] }));
 const reorient = new ReorientationPlugin({ lat: originLat, lon: originLon, height: seaHeight, recenter: true });
 tiles.registerPlugin(reorient);
-tiles.registerPlugin(new TilesFadePlugin());
 const TERRAIN_ERROR = 10;  // higher = coarser terrain, fewer tiles to load
 tiles.errorTarget = TERRAIN_ERROR;
 tiles.loadSiblings = false;
@@ -201,9 +200,10 @@ tiles.addEventListener('load-error', (e) => {
 });
 
 // Stylized look: satellite colours snapped to a small palette, flat-shaded facets,
-// and Cesium's flat sea surface pushed under the animated ocean.
-const hexToVec = h => { const c = new THREE.Color(); c.setHex(parseInt(h.slice(1), 16), THREE.SRGBColorSpace); const s = c.clone().convertLinearToSRGB(); return new THREE.Vector3(s.r, s.g, s.b); };
-const PALETTE = [ // [typical imagery colour (sRGB), stylized output]
+// and Cesium's flat sea surface pushed under the animated ocean. Done once, globally,
+// through three.js shader chunks that only apply to materials with the STYLIZED define,
+// so terrain materials never need their shaders rebuilt after the first compile.
+const PALETTE = [ // [typical imagery colour (sRGB), stylized output (sRGB)]
   ['#3B4630', '#4F6E3F'], // dark forest
   ['#6E7150', '#7C8A55'], // olive scrub
   ['#A39274', '#CDB98F'], // dry soil, fields
@@ -214,54 +214,56 @@ const PALETTE = [ // [typical imagery colour (sRGB), stylized output]
   ['#3A3936', '#5E5A52'], // shadow, asphalt
   ['#2A4656', '#3E7F8C'], // inland water
 ];
-const styleUniforms = {
-  uStyleSrc: { value: PALETTE.map(p => hexToVec(p[0])) },
-  uStyleDst: { value: PALETTE.map(p => new THREE.Color(p[1])) },
-  uSandC: { value: new THREE.Color('#E2D6B8') }, uGrassC: { value: new THREE.Color('#5F7D4A') }, uRockC: { value: new THREE.Color('#9A958A') },
-};
-const STYLED = Symbol('styled');
-function injectStyle(shader) {
-  if (shader.fragmentShader.includes('/*STYLIZED*/')) return;
-  Object.assign(shader.uniforms, styleUniforms);
-  shader.vertexShader = shader.vertexShader
-    .replace(/void main\(\s*\)\s*{/, m => 'varying float vStyleY;\n' + m)
-    .replace('#include <project_vertex>', /* glsl */`
-      vec4 styWp = modelMatrix * vec4( transformed, 1.0 );
-      float styH = styWp.y + dot( styWp.xz, styWp.xz ) / ( 2.0 * ${EARTH_R.toFixed(1)} );
-      float styDrop = ( 1.0 - smoothstep( 0.3, 1.6, styH ) ) * 14.0;
-      styWp.y -= styDrop;
-      vStyleY = styH;
-      vec4 mvPosition = viewMatrix * styWp;
-      gl_Position = projectionMatrix * mvPosition;`);
-  shader.fragmentShader = shader.fragmentShader
-    .replace(/void main\(\s*\)\s*{/, m => 'uniform vec3 uStyleSrc[9]; uniform vec3 uStyleDst[9]; uniform vec3 uSandC; uniform vec3 uGrassC; uniform vec3 uRockC; varying float vStyleY;\n' + m)
-    .replace('#include <alphamap_fragment>', /* glsl */`/*STYLIZED*/
-      {
-        #ifdef LAYER_COUNT
-          #if LAYER_COUNT > 0
-            #define STY_IMAGERY
-          #endif
-        #endif
-        #ifdef STY_IMAGERY
-          vec3 sc = pow( max( diffuseColor.rgb, vec3( 0.0 ) ), vec3( 1.0 / 2.2 ) );
-          float best = 1e9; vec3 outc = sc;
-          for ( int i = 0; i < 9; i ++ ) { vec3 dd = sc - uStyleSrc[ i ]; float e = dot( dd, dd ); if ( e < best ) { best = e; outc = uStyleDst[ i ]; } }
-          diffuseColor.rgb = outc;
-        #else
-          diffuseColor.rgb = vStyleY < 3.0 ? uSandC : ( vStyleY < 320.0 ? uGrassC : uRockC );
-        #endif
-        if ( vStyleY < 1.8 ) diffuseColor.rgb = mix( diffuseColor.rgb, uSandC, 0.6 );
-      }
-      #include <alphamap_fragment>`);
+const srgbVec = h => { const c = new THREE.Color(h).convertLinearToSRGB(); return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`; };
+const linVec = h => { const c = new THREE.Color(h); return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`; };
+{
+  const SC = THREE.ShaderChunk;
+  SC.common += '\n#ifdef STYLIZED\nvarying float vStyleY;\n#endif\n';
+  const origProject = SC.project_vertex;
+  SC.project_vertex = /* glsl */`
+#ifdef STYLIZED
+  vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 );
+  vec3 styW = transpose( mat3( viewMatrix ) ) * mvPosition.xyz + cameraPosition;
+  float styH = styW.y + dot( styW.xz, styW.xz ) / ( 2.0 * ${EARTH_R.toFixed(1)} );
+  float styDrop = ( 1.0 - smoothstep( 0.3, 1.6, styH ) ) * 14.0;
+  mvPosition.xyz -= mat3( viewMatrix ) * vec3( 0.0, styDrop, 0.0 );
+  vStyleY = styH;
+  gl_Position = projectionMatrix * mvPosition;
+#else
+${origProject}
+#endif
+`;
+  const origAlphamap = SC.alphamap_fragment;
+  SC.alphamap_fragment = /* glsl */`
+#ifdef STYLIZED
+  {
+    const vec3 SAND = ${linVec('#D2C29C')}; const vec3 GRASS = ${linVec('#5F7D4A')}; const vec3 ROCK = ${linVec('#938C7E')};
+    #ifdef LAYER_COUNT
+      #if LAYER_COUNT > 0
+        #define STY_IMAGERY
+      #endif
+    #endif
+    #ifdef STY_IMAGERY
+      vec3 stySrc[9] = vec3[9]( ${PALETTE.map(p => srgbVec(p[0])).join(', ')} );
+      vec3 styDst[9] = vec3[9]( ${PALETTE.map(p => linVec(p[1])).join(', ')} );
+      vec3 sc = pow( max( diffuseColor.rgb, vec3( 0.0 ) ), vec3( 1.0 / 2.2 ) );
+      float best = 1e9; vec3 outc = sc;
+      for ( int i = 0; i < 9; i ++ ) { vec3 dd = sc - stySrc[ i ]; float e = dot( dd, dd ); if ( e < best ) { best = e; outc = styDst[ i ]; } }
+      diffuseColor.rgb = outc;
+    #else
+      diffuseColor.rgb = vStyleY < 3.0 ? SAND : ( vStyleY < 320.0 ? GRASS : ROCK );
+    #endif
+    if ( vStyleY < 1.8 ) diffuseColor.rgb = mix( diffuseColor.rgb, SAND, 0.6 );
+  }
+#endif
+${origAlphamap}
+`;
 }
 function styleMaterial(mat) {
-  if (mat[STYLED] && mat[STYLED] === mat.onBeforeCompile) return;
-  const prev = mat.onBeforeCompile;
-  const fn = function (shader, r) { if (prev) prev.call(this, shader, r); injectStyle(shader); };
-  mat.onBeforeCompile = fn; mat[STYLED] = fn;
+  if (mat.defines && mat.defines.STYLIZED) return; // clones keep the define
+  mat.defines = { ...(mat.defines || {}), STYLIZED: 1 };
   mat.flatShading = true;
   if ('roughness' in mat) { mat.roughness = 1; mat.metalness = 0; }
-  mat.defines = { ...(mat.defines || {}), STYLIZED: 1 };
   mat.needsUpdate = true;
 }
 let styleTimer = 0, styleDirty = true;
