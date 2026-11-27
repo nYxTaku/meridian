@@ -201,8 +201,8 @@ tiles.addEventListener('load-error', (e) => {
 
 // Stylized look: satellite colours snapped to a small palette, flat-shaded facets,
 // and Cesium's own sea surface cut out using its water mask. Done once, globally,
-// through three.js shader chunks that only apply to materials with the STYLIZED define,
-// so terrain materials never need their shaders rebuilt after the first compile.
+// through three.js shader chunks that only apply to terrain tiles (standard materials
+// carrying Cesium's water mask), so nothing has to be re-applied per tile.
 const PALETTE = [ // [typical imagery colour (sRGB), stylized output (sRGB)]
   ['#3B4630', '#4F6E3F'], // dark forest
   ['#6E7150', '#7C8A55'], // olive scrub
@@ -218,10 +218,12 @@ const srgbVec = h => { const c = new THREE.Color(h).convertLinearToSRGB(); retur
 const linVec = h => { const c = new THREE.Color(h); return `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`; };
 {
   const SC = THREE.ShaderChunk;
-  SC.common += '\n#ifdef STYLIZED\nvarying float vStyleY;\n#endif\n';
+  // Terrain tiles are the only standard materials with a roughness map (Cesium's water mask),
+  // so that is the switch. A define on the material would be wiped by the imagery plugin.
+  SC.common += '\n#if defined( USE_ROUGHNESSMAP ) && defined( STANDARD )\n#define STY_TERRAIN\nvarying float vStyleY;\n#endif\n';
   const origProject = SC.project_vertex;
   SC.project_vertex = /* glsl */`
-#ifdef STYLIZED
+#ifdef STY_TERRAIN
   vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 );
   vec3 styW = transpose( mat3( viewMatrix ) ) * mvPosition.xyz + cameraPosition;
   float styH = styW.y + dot( styW.xz, styW.xz ) / ( 2.0 * ${EARTH_R.toFixed(1)} );
@@ -233,11 +235,9 @@ ${origProject}
 `;
   const origAlphamap = SC.alphamap_fragment;
   SC.alphamap_fragment = /* glsl */`
-#ifdef STYLIZED
-  #ifdef USE_ROUGHNESSMAP
-    // Cesium water mask (stored by the terrain loader as the roughness map: 0 = water)
-    if ( texture2D( roughnessMap, vRoughnessMapUv ).g < 0.5 ) discard;
-  #endif
+#ifdef STY_TERRAIN
+  // Cesium water mask (stored by the terrain loader as the roughness map: 0 = water)
+  if ( texture2D( roughnessMap, vRoughnessMapUv ).g < 0.5 ) discard;
   {
     const vec3 SAND = ${linVec('#D2C29C')}; const vec3 GRASS = ${linVec('#5F7D4A')}; const vec3 ROCK = ${linVec('#938C7E')};
     #ifdef LAYER_COUNT
@@ -268,8 +268,7 @@ function fixMask(tex) {
 }
 function styleMaterial(mat) {
   fixMask(mat.roughnessMap);
-  if (mat.defines && mat.defines.STYLIZED) return; // clones keep the define
-  mat.defines = { ...(mat.defines || {}), STYLIZED: 1 };
+  if (mat.flatShading && mat.roughness === 1) return;
   mat.flatShading = true;
   if ('roughness' in mat) { mat.roughness = 1; mat.metalness = 0; }
   mat.needsUpdate = true;
