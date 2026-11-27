@@ -68,6 +68,8 @@
   #touch button { width:64px; height:64px; border-radius:50%; border:2px solid var(--ink); background:rgba(236,234,229,0.88); font-family:'Anonymous Pro',monospace; font-weight:700; font-size:22px; color:var(--ink); touch-action:none; }
   #status { right:16px; top:16px; font-size:12px; letter-spacing:0.08em; padding:8px 14px; font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; }
   #status.hide { display:none; }
+  #perf { position:fixed; right:16px; top:60px; display:none; background:rgba(30,30,28,0.85); color:#ECEAE5; border-radius:8px; padding:6px 10px; font-family:'Anonymous Pro',monospace; font-weight:700; font-size:11px; letter-spacing:0.06em; }
+  #perf.show { display:block; }
   #warn { position:fixed; left:50%; top:18px; transform:translateX(-50%); display:none; background:#1E1E1C; color:#ECEAE5; border-radius:999px; padding:9px 22px; font-family:'Anonymous Pro','Courier New',monospace; font-weight:700; font-size:13px; letter-spacing:0.08em; }
   #warn.show { display:block; }
   #attr { position:fixed; right:12px; bottom:8px; font-size:10px; color:#1E1E1C; background:rgba(236,234,229,0.75); padding:3px 8px; border-radius:6px; }
@@ -113,6 +115,7 @@
   <div><b>W</b><b>S</b> throttle up / down</div>
   <div><b>A</b><b>D</b> rudder left / right</div>
   <div><b>T</b> time speed ×1 / ×5 / ×20 / ×50</div>
+  <div><b>F</b> performance read-out</div>
   <div><b>C</b> reset camera · <b>R</b> reset ship</div>
   <div class="small">drag to look around · scroll to zoom</div>
 </div>
@@ -141,10 +144,11 @@
 </div></div>
 
 <div id="status" class="panel">LOADING TERRAIN…</div>
+<div id="perf"></div>
 <div id="warn">LAND AHEAD — REVERSE OR TURN</div>
 <div id="attr"><a href="https://cesium.com/platform/cesium-ion/" target="_blank" rel="noopener">Powered by Cesium ion</a> · Imagery © Microsoft Bing · Models: Muyaya Concept (CC BY 4.0)</div>
 <div id="err">This prototype needs WebGL, which this browser or device doesn’t provide.</div>
 
-<script type="module" src="main.js?v=6"></script>
+<script type="module" src="main.js?v=7"></script>
 </body>
 </html>

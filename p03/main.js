@@ -425,6 +425,7 @@ window.addEventListener('keydown', e => {
   if (k === 'c') { cam.orbitYaw = 0; cam.orbitPitch = 0; cam.zoom = def.zoom; }
   if (k === 'r') resetShip();
   if (k === 't') setTime(timeIdx + 1);
+  if (k === 'f') perfEl.classList.toggle('show');
 });
 window.addEventListener('keyup', e => {
   const k = e.key.toLowerCase();
@@ -504,6 +505,8 @@ function checkSpawn() {
 // ---------- loop ----------
 const spd = document.getElementById('spd'), hdg = document.getElementById('hdg'), rud = document.getElementById('rud'), posEl = document.getElementById('pos'), warnEl = document.getElementById('warn');
 const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const perfEl = document.getElementById('perf');
+let perfFrames = 0, perfTime = 0, perfWorst = 0, perfHitches = 0;
 const clock = new THREE.Clock();
 const ease = (k, dt) => 1 - Math.exp(-k * dt);
 const desired = new THREE.Vector3();
@@ -511,7 +514,8 @@ let t = 0, hudTimer = 0, landAhead = false, probeTimer = 0, camGroundTimer = 0, 
 camera.position.set(0, 20, -40);
 
 function step() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = clock.getDelta();
+  const dt = Math.min(rawDt, 0.05);
   t += dt;
 
   // terrain housekeeping
@@ -622,6 +626,13 @@ function step() {
     const ll = latLonAt(ship.x, ship.z);
     const la = ll.lat / DEG, lo = ll.lon / DEG;
     posEl.textContent = `${Math.abs(la).toFixed(3)}° ${la >= 0 ? 'N' : 'S'} ${Math.abs(lo).toFixed(3)}° ${lo >= 0 ? 'E' : 'W'}`;
+  }
+
+  // performance read-out (F key): fps, worst frame and hitches over the last second
+  perfFrames++; perfTime += rawDt; perfWorst = Math.max(perfWorst, rawDt); if (rawDt > 0.05) perfHitches++;
+  if (perfTime > 1) {
+    if (perfEl.classList.contains('show')) perfEl.textContent = `${Math.round(perfFrames / perfTime)} FPS · WORST ${Math.round(perfWorst * 1000)} MS · HITCHES ${perfHitches} · TILES ${tiles.stats.visible} · DRAWS ${renderer.info.render.calls}`;
+    perfFrames = 0; perfTime = 0; perfWorst = 0; perfHitches = 0;
   }
 
   renderer.render(scene, camera);
